@@ -1,0 +1,104 @@
+---
+title: "Storm Data Analysis of finding the most harmful weather disaster in U.S. "
+author: "HPSUN"
+date: "2017年12月1日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Synopsis
+This is a Course Project of Reproducible Research in Coursera. We used the Storm Data from U.S. National Oceanic and Atmospheric Administration's (NOAA), in order to find some features of Storms in U.S. during the past 50-60 years. To be specific, addressing two questions. First one is which types of events are most harmful with respect to population health, and the Second is which types of events have the greatest economic consequences. So far we can tell tornado are most harmful to population and flood costs greatest economic damages.
+## Data Processing
+### read data
+```{r,cache=TRUE,message=FALSE}
+library(readr)
+storm <- read_csv("StormData.csv.bz2")
+```
+### check how many types of events
+The top 100 events recorded are list below
+```{r}
+a <- sort(table(storm$EVTYPE),decreasing = T)
+head(a,100)
+```
+The mean records for a event is calculated as total counts devided by numbers of event type
+```{r}
+sum(a)
+length(a)
+sum(a) / length(a)
+```
+From these results, we can tell that, although there over 900 types of events, but only a few are common. If we want to know the most harmful event, maybe we shold just take the top ones into consideration to save calculation.  
+So, I extrat the events over the mean records for further calculation.
+```{r,cache=TRUE}
+sub_storm <- subset(storm,storm$EVTYPE %in% names(which(a>(sum(a) / length(a)))))
+sub_storm <- subset(sub_storm, select = c(EVTYPE,FATALITIES,INJURIES,PROPDMG,PROPDMGEXP,CROPDMG,CROPDMGEXP))
+```
+for the damage part, we need to calculate the reall number combine the number(PROPDMG,CROPDMG) and the order of magnitude (PROPDMGEXP,CROPDMGEXP)
+first, let's find out what kinds of mark in PROPDMGEXP and CROPDMGEXP
+```{r}
+table(sub_storm$PROPDMGEXP)
+table(sub_storm$CROPDMGEXP)
+```
+we will set "-","?","+" to 0; "H" stands for hundred, so it's 2;"K","k" are 3; "M" is 6; "B" is 9.
+```{r,cache=TRUE}
+sub_storm[which(sub_storm$PROPDMGEXP=="-"|sub_storm$PROPDMGEXP=="?"|sub_storm$PROPDMGEXP=="+"),"PROPDMGEXP"] <- 0
+sub_storm[which(sub_storm$PROPDMGEXP=="B"),"PROPDMGEXP"] <- 9
+sub_storm[which(sub_storm$PROPDMGEXP=="H"),"PROPDMGEXP"] <- 2
+sub_storm[which(sub_storm$PROPDMGEXP=="K"),"PROPDMGEXP"] <- 3
+sub_storm[which(sub_storm$PROPDMGEXP=="m"),"PROPDMGEXP"] <- 6
+sub_storm[which(sub_storm$PROPDMGEXP=="M"),"PROPDMGEXP"] <- 6
+sub_storm[which(sub_storm$CROPDMGEXP=="?"),"CROPDMGEXP"] <- 0
+sub_storm[which(sub_storm$CROPDMGEXP=="B"),"CROPDMGEXP"] <- 9
+sub_storm[which(sub_storm$CROPDMGEXP=="k"),"CROPDMGEXP"] <- 3
+sub_storm[which(sub_storm$CROPDMGEXP=="K"),"CROPDMGEXP"] <- 3
+sub_storm[which(sub_storm$CROPDMGEXP=="M"),"CROPDMGEXP"] <- 6
+sub_storm$PROPDMGEXP <- as.numeric(sub_storm$PROPDMGEXP)
+sub_storm$CROPDMGEXP <- as.numeric(sub_storm$CROPDMGEXP)
+```
+we calculate the real cost and store it
+```{r}
+sub_storm$PROPDMGCOST <- sub_storm$PROPDMG*(10^sub_storm$PROPDMGEXP)
+sub_storm$CROPDMGCOST <- sub_storm$CROPDMG*(10^sub_storm$CROPDMGEXP)
+```
+
+## Results
+### Events harmful to population health
+```{r,message=FALSE}
+library(ggplot2)
+library(reshape2)
+pop <- sub_storm[,c("EVTYPE","FATALITIES","INJURIES")]
+a_pop <- aggregate(. ~ EVTYPE,data = pop,sum)
+top_F <- order(a_pop$FATALITIES,decreasing = T)[1:5]
+top_I <- order(a_pop$INJURIES,decreasing = T)[1:5]
+top <- unique(c(top_F,top_I))
+x <- a_pop[top,]
+y <- melt(x)
+g <- ggplot(y,aes(EVTYPE,value))
+g <- g + geom_col() + facet_grid(. ~ variable)
+g + theme(axis.text.x = element_text(angle=90)) + labs(y="Numbers",x="",title="Most harmful Event for Health")
+```
+
+### Events cause greatest economic consequences
+```{r,message=FALSE}
+eco <- sub_storm[,c("EVTYPE","PROPDMGCOST","CROPDMGCOST")]
+a_eco <- aggregate(. ~ EVTYPE,data = eco,sum)
+top_P <- order(a_eco$PROPDMGCOST,decreasing = T)[1:5]
+top_C <- order(a_eco$CROPDMGCOST,decreasing = T)[1:5]
+top <- unique(c(top_P,top_C))
+x <- a_eco[top,]
+y <- melt(x)
+g <- ggplot(y,aes(EVTYPE,value))
+g <- g + geom_col() + facet_grid(. ~ variable)
+g + theme(axis.text.x = element_text(angle=90)) + labs(y="Damges Cost",x="",title="Events cause greatest economic consequences")
+```
+
+### conclusion
+From above, we found that tornado is most harmful to population health and flood casued greatest economic consequences.
+
+
+
+
+
+
